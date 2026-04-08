@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENV',       choices: ['main', 'dev'], description: 'Target environment')
+        string(name: 'IMAGE_TAG', defaultValue: 'v1.0',    description: 'Docker image tag')
+    }
+
+    stages {
+        stage('Deploy') {
+            steps {
+                script {
+                    def imageName = (params.ENV == 'main') ? 'nodemain' : 'nodedev'
+                    def appPort   = (params.ENV == 'main') ? '3000'     : '3001'
+
+                    sh """
+                        docker ps -q --filter name=${imageName} | xargs -r docker stop
+                        docker ps -aq --filter name=${imageName} | xargs -r docker rm
+                    """
+                    sh """
+                        docker run -d --name ${imageName} \
+                            -e HOST=0.0.0.0 \
+                            -e PORT=3000 \
+                            --expose ${appPort} \
+                            -p ${appPort}:3000 \
+                            ${imageName}:${params.IMAGE_TAG}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success { echo "Manually deployed ${params.ENV} with tag ${params.IMAGE_TAG}" }
+        failure { echo "Deployment failed for ${params.ENV}" }
+    }
+}
